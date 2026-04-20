@@ -79,7 +79,6 @@ function CesiumMap({ onSelect, clearTrigger }) {
                     });
 
                     onSelect({
-                        area: "Hesaplanan Alan",
                         coords: finalPoints
                     });
 

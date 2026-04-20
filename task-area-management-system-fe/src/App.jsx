@@ -1,49 +1,62 @@
 import React, { useState, useCallback } from 'react';
 import CesiumMap from './CesiumMap';
 import InfoPanel from './InfoPanel';
+import TaskAreaPopup from './TaskAreaPopUp';
+import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer, toast } from 'react-toastify';
+import taskAreaService from './service/taskAreaService';
 
 function App() {
-    const [selectedRegion, setSelectedRegion] = useState(null);
+    const [activeCoordinates, setActiveCoordinates] = useState(null);
     const [tasks, setTasks] = useState([]);
-    const [clearKey, setClearKey] = useState(0);
-    const [isFormVisible, setIsFormVisible] = useState(false);
-    const isButtonDisabled = selectedRegion === null;
+    const [isPopupOpen, setIsPopupOpen] = useState(false);
+    const isButtonDisabled = activeCoordinates === null;
 
     const handleRegionSelect = useCallback((regionData) => {
-        setSelectedRegion(regionData);
+        setActiveCoordinates(regionData?.coords);
     }, []);
 
-    const saveTask = (taskDetails) => {
+    const handleFinalSubmit = async (formData) => {
         const newTask = {
-            ...taskDetails,
-            coords: selectedRegion.coords,
-            id: Date.now()
+            ...formData,
+            coordinates: activeCoordinates.map((c, i) => ({
+                latitude: c.x,
+                longitude: c.y,
+                altitude: c.z,
+                orderIndex: i
+            }))
         };
-        setTasks([...tasks, newTask]);
-        setSelectedRegion(null);
-        alert("Görev Bölgesi Başarıyla Tanımlandı!");
+
+        console.log("New task :", newTask);
+        try {
+            const result = await taskAreaService.createTaskArea(newTask);
+            if (result) {
+                toast.success("Görev alanı başarıyla kaydedildi!");
+                setIsPopupOpen(false);
+                setActiveCoordinates([]);
+                setTasks([...tasks, newTask]);
+            }
+        } catch (error) {
+            console.error("Servis hatası:", error);
+        }
     };
 
-    const handlePinSelect = (data) => {
-        setSelectedRegion(data);
-    };
-
-    const handleClear = () => {
-        setClearKey(Date.now());
-        setSelectedRegion(null);
-    };
-
-    const showInfoPanel = () => {
-        setIsFormVisible(true);
+    const handleMakeTaskArea = () => {
+        if (activeCoordinates.length >= 3) {
+            setIsPopupOpen(true);
+        } else {
+            toast.warn("Lütfen önce harita üzerinde bir alan çizin!");
+        }
     };
 
     return (
-        <div style={{ display: 'flex', width: '75vw', height: '100vh' }}>
-            {console.log("Seçili Bölge Durumu:", selectedRegion)}
+        <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
+            {console.log("Seçili Bölge Durumu:", activeCoordinates)}
+            {console.log("isPopupOpen:", isPopupOpen)}
             <button
                 disabled={isButtonDisabled}
 
-                onClick={() => setIsFormVisible(true)}
+                onClick={handleMakeTaskArea}
                 style={{
                     position: "absolute",
                     bottom: 20,
@@ -55,30 +68,35 @@ function App() {
                     fontWeight: "bold",
                     border: "none",
 
-                    // Duruma göre renk değişimi (Kullanıcı deneyimi için)
-                    backgroundColor: !selectedRegion ? "#bdc3c7" : "#3498db",
-                    color: !selectedRegion ? "#7f8c8d" : "white",
-                    cursor: !selectedRegion ? "not-allowed" : "pointer",
+                    backgroundColor: !activeCoordinates ? "#bdc3c7" : "#3498db",
+                    color: !activeCoordinates ? "#7f8c8d" : "white",
+                    cursor: !activeCoordinates ? "not-allowed" : "pointer",
 
-                    transition: "all 0.3s ease" // Geçiş efekti
+                    transition: "all 0.3s ease"
                 }}
             >
-                {!selectedRegion ? "Lütfen Haritadan Alan Seçin" : "Seçili Alanı Görev Bölgesi Yap"}
+                {!activeCoordinates ? "Lütfen Haritadan Alan Seçin" : "Seçili Alanı Görev Bölgesi Yap"}
             </button>
-            {/* Harita Alanı */}
-            <div style={{ flex: 1, position: 'relative' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
                 <CesiumMap onSelect={handleRegionSelect} />
             </div>
-
-            {/* Sağ Panel */}
-            <div style={{ width: '400px', borderLeft: '1px solid #ccc', overflowY: 'auto' }}>
-                <InfoPanel
-                    selectedRegion={handleRegionSelect}
-                    isFormVisible={isFormVisible}
-                    onSaveTask={saveTask}
-                    tasks={tasks}
-                />
-            </div>
+            <TaskAreaPopup
+                isOpen={isPopupOpen}
+                onClose={() => setIsPopupOpen(false)}
+                onSubmit={handleFinalSubmit}
+            />
+            <ToastContainer
+                position="top-right"
+                autoClose={3000}
+                hideProgressBar={false}
+                newestOnTop={false}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+                theme="colored"
+            />
         </div>
     );
 }
