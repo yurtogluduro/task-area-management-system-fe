@@ -1,59 +1,133 @@
 import React, { useEffect, useRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Source/Widgets/widgets.css";
+import taskAreaService from './service/taskAreaService';
+import { AreaType } from './constants/enums';
 
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODUwZGFlOC1hZTY2LTQ3NGMtOTYyZi00YzIzYTEzNWU0MTEiLCJpZCI6NDE5OTAwLCJpYXQiOjE3NzY1MDk4ODd9.pCjHVbb_dq_cBa6qsAiQzTph9669PKnKZUwmTlrgPHY';
 
-function CesiumMap({ onSelect, clearTrigger }) {
+function CesiumMap({ onSelect }) {
     const cesiumContainer = useRef(null);
     const viewerRef = useRef(null);
 
     const activePointsRef = useRef([]);
 
-    useEffect(() => {
-        if (viewerRef.current && clearTrigger > 0) {
-            console.log("clearTrigger running");
-            viewerRef.current.entities.removeAll();
-            viewerRef.current.scene.primitives.removeAll();
-            activePointsRef.current = [];
+    const getPriorityColor = (priority) => {
+        switch (priority) {
+            case 'CRITICAL': return Cesium.Color.RED.withAlpha(0.4);
+            case 'HIGH': return Cesium.Color.ORANGE.withAlpha(0.4);
+            case 'MEDIUM': return Cesium.Color.YELLOW.withAlpha(0.4);
+            case 'LOW': return Cesium.Color.GREEN.withAlpha(0.4);
+            default: return Cesium.Color.BLUE.withAlpha(0.4);
         }
-    }, [clearTrigger]);
+    };
+
+    const drawTaskOnMap = (viewer, task) => {
+        if (!task.coordinates || task.coordinates.length < 3) return;
+
+        const degreeArray = task.coordinates
+            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+            .flatMap(coord => [
+                Number(coord.longitude),
+                Number(coord.latitude)
+            ]);
+
+        try {
+            const entity = viewer.entities.add({
+                id: task.id.toString(),
+                name: task.taskName,
+                areaName: task.taskName,
+                polygon: {
+                    hierarchy: Cesium.Cartesian3.fromDegreesArray(degreeArray),
+                    material: getPriorityColor(task.priority),
+                    outline: true,
+                    heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                },
+                description: `
+        <table class="cesium-infoBox-descriptionTable">
+            <tbody>
+                <tr>
+                    <th>Görev Tipi</th>
+                    <td>${task.areaType}</td>
+                </tr>
+                <tr>
+                    <th>Açıklama</th>
+                    <td>${task.description || 'Açıklama yok.'}</td>
+                </tr>
+            </tbody>
+        </table>
+    `
+            });
+
+
+        } catch (e) {
+            console.error("çizilirken hata:", e);
+        }
+    };
+
+
 
     useEffect(() => {
         if (cesiumContainer.current && !viewerRef.current) {
             const viewer = new Cesium.Viewer(cesiumContainer.current, {
                 selectionIndicator: false,
-                infoBox: false,
+                infoBox: true,
             });
             viewerRef.current = viewer;
 
             focusOnTurkey(viewer);
 
+            const onMapReady = async () => {
+                removeListener();
+
+                try {
+                    const tasks = await taskAreaService.getAllTasks();
+                    if (tasks && tasks.length > 0) {
+                        tasks.forEach(task => drawTaskOnMap(viewer, task));
+                    }
+                } catch (error) {
+                    console.error("Veri hatası:", error);
+                }
+            };
+
+            const removeListener = viewer.scene.postRender.addEventListener(onMapReady);
+
+
             const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
             handler.setInputAction((click) => {
-                const cartesian = viewer.camera.pickEllipsoid(click.position);
-                if (Cesium.defined(cartesian)) {
-                    activePointsRef.current.push(cartesian);
+                const pickedObject = viewer.scene.pick(click.position);
+                if (Cesium.defined(pickedObject) && pickedObject.id) {
+                    const entity = pickedObject.id;
+                    const name = entity.taskName;
 
-                    viewer.entities.add({
-                        position: cartesian,
-                        point: { pixelSize: 8, color: Cesium.Color.RED, disableDepthTestDistance: Number.POSITIVE_INFINITY }
-                    });
+                    console.log("Seçilen Alanın Adı:", name);
+                    viewer.selectedEntity = entity;
+                } else {
+                    const cartesian = viewer.camera.pickEllipsoid(click.position);
+                    if (Cesium.defined(cartesian)) {
+                        activePointsRef.current.push(cartesian);
 
-                    if (activePointsRef.current.length === 3) {
                         viewer.entities.add({
-                            polygon: {
-                                hierarchy: new Cesium.CallbackProperty(() => {
-                                    return new Cesium.PolygonHierarchy(activePointsRef.current);
-                                }, false),
-                                material: Cesium.Color.YELLOW.withAlpha(0.4),
-                                outline: true,
-                                outlineColor: Cesium.Color.BLACK,
-                            }
+                            position: cartesian,
+                            point: { pixelSize: 8, color: Cesium.Color.RED, disableDepthTestDistance: Number.POSITIVE_INFINITY }
                         });
+
+                        if (activePointsRef.current.length === 3) {
+                            viewer.entities.add({
+                                polygon: {
+                                    hierarchy: new Cesium.CallbackProperty(() => {
+                                        return new Cesium.PolygonHierarchy(activePointsRef.current);
+                                    }, false),
+                                    material: Cesium.Color.YELLOW.withAlpha(0.4),
+                                    outline: true,
+                                    outlineColor: Cesium.Color.BLACK,
+                                }
+                            });
+                        }
                     }
                 }
+
             }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
             handler.setInputAction(() => {

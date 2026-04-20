@@ -1,7 +1,7 @@
 export const AreaType = {
-  RECONNAISSANCE: "Keşif",
+  INTELLIGENCE: "İstihbarat",
   SURVEILLANCE: "Gözetleme",
-  LOGISTICS: "Lojistik",
+  INTERVENTION: "Müdahale",
   PATROL: "Devriye",
   EMERGENCY: "Acil Durum",
 };

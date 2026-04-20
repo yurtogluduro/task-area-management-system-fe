@@ -5,6 +5,7 @@ import TaskAreaPopup from './TaskAreaPopUp';
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer, toast } from 'react-toastify';
 import taskAreaService from './service/taskAreaService';
+import * as Cesium from 'cesium';
 
 function App() {
     const [activeCoordinates, setActiveCoordinates] = useState(null);
@@ -16,15 +17,22 @@ function App() {
         setActiveCoordinates(regionData?.coords);
     }, []);
 
+    const prepareCoordinatesDegree = (cartesianPositions) => {
+        return cartesianPositions.map((cartesian, index) => {
+            const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+            return {
+                longitude: Cesium.Math.toDegrees(cartographic.longitude),
+                latitude: Cesium.Math.toDegrees(cartographic.latitude),
+                orderIndex: index // Çizerken sıralama bozulmaması için kritik!
+            };
+        });
+    };
+
     const handleFinalSubmit = async (formData) => {
         const newTask = {
             ...formData,
-            coordinates: activeCoordinates.map((c, i) => ({
-                latitude: c.x,
-                longitude: c.y,
-                altitude: c.z,
-                orderIndex: i
-            }))
+            coordinates: prepareCoordinatesDegree(activeCoordinates)
         };
 
         console.log("New task :", newTask);

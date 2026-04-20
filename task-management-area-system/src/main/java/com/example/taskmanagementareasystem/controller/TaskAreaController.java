@@ -27,21 +27,15 @@ public class TaskAreaController {
         return new ResponseEntity<>(savedTask, HttpStatus.CREATED);
     }
 
-    /*
+
     @GetMapping
     public ResponseEntity<List<TaskAreaDto>> getAll() {
         return ResponseEntity.ok(taskAreaService.getAllTasks());
     }
-
+    /*
     @GetMapping("/{id}")
     public ResponseEntity<TaskAreaDto> getById(@PathVariable Long id) {
         return ResponseEntity.ok(taskAreaService.getById(id));
     }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        taskAreaService.deleteTask(id);
-        return ResponseEntity.noContent().build();
-    }
-     */
+    */
 }
