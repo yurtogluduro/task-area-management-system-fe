@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AreaType } from './constants/enums';
 
-const TaskAreaPopUp = ({ isOpen, onClose, onSubmit, coordinatesCount }) => {
+const TaskAreaPopUp = ({ isOpen, onClose, onSubmit }) => {
     const [formData, setFormData] = useState({
         taskName: '',
         areaType: Object.keys(AreaType)[0],
@@ -115,9 +115,6 @@ const TaskAreaPopUp = ({ isOpen, onClose, onSubmit, coordinatesCount }) => {
             <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
                 <div style={styles.header}>
                     <div>Yeni Görev Bölgesi Oluştur</div>
-                    <div style={{ fontSize: '12px', fontWeight: 'normal', opacity: 0.9, marginTop: '4px' }}>
-                        Seçilen Nokta Sayısı: {coordinatesCount}
-                    </div>
                 </div>
 
                 <div style={styles.body}>

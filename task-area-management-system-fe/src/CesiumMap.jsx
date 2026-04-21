@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Source/Widgets/widgets.css";
 import taskAreaService from './service/taskAreaService';
@@ -6,21 +6,36 @@ import { AreaType } from './constants/enums';
 
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODUwZGFlOC1hZTY2LTQ3NGMtOTYyZi00YzIzYTEzNWU0MTEiLCJpZCI6NDE5OTAwLCJpYXQiOjE3NzY1MDk4ODd9.pCjHVbb_dq_cBa6qsAiQzTph9669PKnKZUwmTlrgPHY';
 
-function CesiumMap({ onSelect }) {
+
+const CesiumMap = forwardRef(({ onSelect, onHandleTasks }, ref) => {
     const cesiumContainer = useRef(null);
     const viewerRef = useRef(null);
 
     const activePointsRef = useRef([]);
 
-    const getPriorityColor = (priority) => {
-        switch (priority) {
-            case 'CRITICAL': return Cesium.Color.RED.withAlpha(0.4);
-            case 'HIGH': return Cesium.Color.ORANGE.withAlpha(0.4);
-            case 'MEDIUM': return Cesium.Color.YELLOW.withAlpha(0.4);
-            case 'LOW': return Cesium.Color.GREEN.withAlpha(0.4);
-            default: return Cesium.Color.BLUE.withAlpha(0.4);
+    useImperativeHandle(ref, () => ({
+        addNewEntity(newRecord) {
+            if (viewerRef.current && newRecord) {
+                const existing = viewerRef.current.entities.getById(newRecord.id.toString());
+                if (existing) return;
+                drawTaskOnMap(viewerRef.current, newRecord)
+                console.log("Yeni entity haritaya eklendi.");
+            }
+        },
+        handleFocusTask(task) {
+            console.log("useImperativeHandle ", task);
+            if (viewerRef.current && task) {
+                const entity = viewerRef.current.entities.getById(task.id.toString());
+                if (entity) {
+                    viewerRef.current.flyTo(entity, {
+                        duration: 2,
+                        offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-90))
+                    });
+                    viewerRef.current.selectedEntity = entity;
+                }
+            }
         }
-    };
+    }), []);
 
     const drawTaskOnMap = (viewer, task) => {
         if (!task.coordinates || task.coordinates.length < 3) return;
@@ -35,11 +50,11 @@ function CesiumMap({ onSelect }) {
         try {
             const entity = viewer.entities.add({
                 id: task.id.toString(),
-                name: task.taskName,
+                name: 'Görev Alanı Bilgisi',
                 areaName: task.taskName,
                 polygon: {
                     hierarchy: Cesium.Cartesian3.fromDegreesArray(degreeArray),
-                    material: getPriorityColor(task.priority),
+                    material: Cesium.Color.BLUE.withAlpha(0.4),
                     outline: true,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
@@ -47,11 +62,15 @@ function CesiumMap({ onSelect }) {
         <table class="cesium-infoBox-descriptionTable">
             <tbody>
                 <tr>
-                    <th>Görev Tipi</th>
-                    <td>${task.areaType}</td>
+                    <th>Görev Alan Adı : </th>
+                    <td>${task.taskName}</td>
                 </tr>
                 <tr>
-                    <th>Açıklama</th>
+                    <th>Görev Tipi     :</th>
+                    <td>${AreaType[task.areaType]}</td>
+                </tr>
+                <tr>
+                    <th>Açıklama       :</th>
                     <td>${task.description || 'Açıklama yok.'}</td>
                 </tr>
             </tbody>
@@ -64,7 +83,6 @@ function CesiumMap({ onSelect }) {
             console.error("çizilirken hata:", e);
         }
     };
-
 
 
     useEffect(() => {
@@ -84,6 +102,10 @@ function CesiumMap({ onSelect }) {
                     const tasks = await taskAreaService.getAllTasks();
                     if (tasks && tasks.length > 0) {
                         tasks.forEach(task => drawTaskOnMap(viewer, task));
+                        console.log("cesium task gönderdi . ", tasks)
+                        onHandleTasks({
+                            taskListInfo: tasks
+                        });
                     }
                 } catch (error) {
                     console.error("Veri hatası:", error);
@@ -170,7 +192,7 @@ function CesiumMap({ onSelect }) {
     }, [onSelect]);
 
     return <div ref={cesiumContainer} style={{ width: "100%", height: "100vh" }} />;
-}
+});
 
 const focusOnTurkey = (viewer) => {
     if (!viewer) return;

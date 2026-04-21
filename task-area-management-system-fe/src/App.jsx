@@ -1,20 +1,28 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import CesiumMap from './CesiumMap';
-import InfoPanel from './InfoPanel';
 import TaskAreaPopup from './TaskAreaPopUp';
+import TaskListPopUp from './components/task-list-popup';
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer, toast } from 'react-toastify';
 import taskAreaService from './service/taskAreaService';
 import * as Cesium from 'cesium';
+import Header from './components/Header';
 
 function App() {
     const [activeCoordinates, setActiveCoordinates] = useState(null);
     const [tasks, setTasks] = useState([]);
     const [isPopupOpen, setIsPopupOpen] = useState(false);
-    const isButtonDisabled = activeCoordinates === null;
+    const [isTaskListPopupOpen, setIsTaskListPopupOpen] = useState(false);
 
+    const isButtonDisabled = activeCoordinates === null;
+    const cesiumRef = useRef();
     const handleRegionSelect = useCallback((regionData) => {
         setActiveCoordinates(regionData?.coords);
+    }, []);
+
+    const handleTaskList = useCallback((tasks) => {
+        setTasks(tasks?.taskListInfo);
+        console.log("handleTaskList running : ", tasks)
     }, []);
 
     const prepareCoordinatesDegree = (cartesianPositions) => {
@@ -24,7 +32,7 @@ function App() {
             return {
                 longitude: Cesium.Math.toDegrees(cartographic.longitude),
                 latitude: Cesium.Math.toDegrees(cartographic.latitude),
-                orderIndex: index // Çizerken sıralama bozulmaması için kritik!
+                orderIndex: index
             };
         });
     };
@@ -42,7 +50,11 @@ function App() {
                 toast.success("Görev alanı başarıyla kaydedildi!");
                 setIsPopupOpen(false);
                 setActiveCoordinates([]);
-                setTasks([...tasks, newTask]);
+                newTask.id = result.id;
+                setTasks([...tasks, result]);
+                if (result && cesiumRef.current) {
+                    cesiumRef.current.addNewEntity(result);
+                }
             }
         } catch (error) {
             console.error("Servis hatası:", error);
@@ -57,18 +69,30 @@ function App() {
         }
     };
 
+    const handleGoToTask = (task) => {
+        setIsTaskListPopupOpen(false);
+        if (cesiumRef.current) {
+            cesiumRef.current.handleFocusTask(task);
+        } else {
+            console.warn("Harita henüz hazır değil!");
+        }
+    };
+
+    const openTaskAreaList = () => {
+        setIsTaskListPopupOpen(true);
+    };
+
     return (
         <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
-            {console.log("Seçili Bölge Durumu:", activeCoordinates)}
-            {console.log("isPopupOpen:", isPopupOpen)}
+            <Header />
             <button
                 disabled={isButtonDisabled}
 
                 onClick={handleMakeTaskArea}
                 style={{
                     position: "absolute",
-                    bottom: 20,
-                    left: "50%",
+                    bottom: 70,
+                    left: "40%",
                     transform: "translateX(-50%)",
                     zIndex: 10,
                     padding: "12px 24px",
@@ -85,8 +109,31 @@ function App() {
             >
                 {!activeCoordinates ? "Lütfen Haritadan Alan Seçin" : "Seçili Alanı Görev Bölgesi Yap"}
             </button>
+            <button
+
+                onClick={openTaskAreaList}
+                style={{
+                    position: "absolute",
+                    bottom: 70,
+                    left: "60%",
+                    transform: "translateX(-50%)",
+                    zIndex: 10,
+                    padding: "12px 24px",
+                    borderRadius: "8px",
+                    fontWeight: "bold",
+                    border: "none",
+
+                    backgroundColor: "#3498db",
+                    color: "white",
+                    cursor: "pointer",
+
+                    transition: "all 0.3s ease"
+                }}
+            >
+                {"Görev Bölgesi Listesi"}
+            </button>
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                <CesiumMap onSelect={handleRegionSelect} />
+                <CesiumMap ref={cesiumRef} onSelect={handleRegionSelect} onHandleTasks={handleTaskList} />
             </div>
             <TaskAreaPopup
                 isOpen={isPopupOpen}
@@ -105,6 +152,13 @@ function App() {
                 pauseOnHover
                 theme="colored"
             />
+            {isTaskListPopupOpen && (
+                <TaskListPopUp
+                    tasks={tasks}
+                    onClose={() => setIsTaskListPopupOpen(false)}
+                    onFocusTask={handleGoToTask}
+                />
+            )}
         </div>
     );
 }
