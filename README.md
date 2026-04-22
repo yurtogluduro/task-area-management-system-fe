@@ -19,5 +19,5 @@ Bu proje, stratejik birimlerin 3D dünya üzerinde gerçek zamanlı takibi, gör
 ## 📦 Kurulum
 
 1. Bağımlılıkları yükleyin: `npm install`
-2. Uygulamayı başlatın: `npm start`
+2. Uygulamayı başlatın: `npm run dev`
 3. Tarayıcıda `localhost:5173` adresine gidin.
