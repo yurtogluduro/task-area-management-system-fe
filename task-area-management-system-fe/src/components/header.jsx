@@ -2,24 +2,9 @@ const Header = () => {
     return (
         <header style={styles.header}>
             <div style={styles.contentWrapper}>
-
                 <div style={styles.logoSection}>
-                    <div style={styles.logoIcon}>🛰️</div>
-                    <h1 style={styles.title}>GÖREV ALANI YÖNETİM VE TAKİP SİSTEMİ </h1>
+                    <h1 style={styles.title}>GÖREV ALANI YÖNETİM VE TAKİP SİSTEMİ</h1>
                 </div>
-
-                <nav style={styles.navSection}>
-                    <div style={styles.statusIndicator}>
-                        <span style={styles.statusDot}></span>
-                        Sistem Çevrimiçi
-                    </div>
-                    <div style={styles.divider}></div>
-                    <div style={styles.userInfo}>
-                        <div style={styles.userAvatar}>A</div>
-                        <span>Admin Panel</span>
-                    </div>
-                </nav>
-
             </div>
         </header>
     );
@@ -27,32 +12,34 @@ const Header = () => {
 
 const styles = {
     header: {
-        height: '60px',
-        backgroundColor: '#074f96',
+        height: '50px',
+        backgroundColor: '#126dc8',
         color: 'white',
         display: 'flex',
-        justifyContent: 'left', // İçerik kapsayıcısını yatayda ortalar
-        alignItems: 'left',
+        alignItems: 'center',
         boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
         zIndex: 1000,
-        width: '100%',
+        width: '100vw',
+        position: 'fixed',
+        top: 0,
+        left: 0,
     },
     contentWrapper: {
         width: '100%',
-        maxWidth: '1400px',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        padding: '0 20px',
+        justifyContent: 'center',
     },
     logoSection: {
         display: 'flex',
-        alignItems: 'center',
-        gap: '12px'
+        alignItems: 'center'
     },
     title: {
         margin: 0,
         fontSize: '18px',
         fontWeight: 'bold',
+        whiteSpace: 'nowrap'
     },
     navSection: {
         display: 'flex',

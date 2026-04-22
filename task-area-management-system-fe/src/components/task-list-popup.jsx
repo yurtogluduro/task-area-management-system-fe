@@ -13,7 +13,6 @@ const TaskListPopUp = ({ tasks, onClose, onFocusTask }) => {
     const [searchResults, setSearchResults] = useState(tasks);
 
     const handleSearch = () => {
-        console.log("filters : ", filters)
         const filtered = tasks.filter(task => {
             const matchName = filters.taskName == '' || task.taskName?.toLowerCase().includes(filters.taskName.toLowerCase());
             const matchType = filters.areaType == '' || task.areaType === filters.areaType ? true : false;

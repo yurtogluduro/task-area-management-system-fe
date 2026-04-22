@@ -10,7 +10,7 @@ import { AreaType } from './constants/enums';
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODUwZGFlOC1hZTY2LTQ3NGMtOTYyZi00YzIzYTEzNWU0MTEiLCJpZCI6NDE5OTAwLCJpYXQiOjE3NzY1MDk4ODd9.pCjHVbb_dq_cBa6qsAiQzTph9669PKnKZUwmTlrgPHY';
 
 
-const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref) => {
+const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea, onSelectedTaskArea, onSelectUnit, onUnSelectUnit }, ref) => {
     const cesiumContainer = useRef(null);
     const viewerRef = useRef(null);
 
@@ -20,21 +20,23 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
         addNewEntity(newRecord) {
             if (viewerRef.current && newRecord) {
                 const existing = viewerRef.current.entities.getById(newRecord.id.toString());
-                if (existing) return;
-                drawTaskOnMap(viewerRef.current, newRecord)
-                console.log("Yeni entity haritaya eklendi.");
+                if (existing) {
+                    viewerRef.current.entities.remove(existing);
+                };
+                drawTaskOnMap(viewerRef.current, newRecord);
+                activePointsRef.current = [];
             }
         },
         addNewUnit(newRecord) {
             if (viewerRef.current && newRecord) {
-                const existing = viewerRef.current.entities.getById(newRecord.id.toString());
-                if (existing) return;
-                markUnitOnMap(viewerRef.current, newRecord)
+                removeAutomatedEntities(viewerRef.current);
+
+                markUnitOnMap(viewerRef.current, newRecord);
+                activePointsRef.current = [];
                 console.log("Yeni unit haritaya eklendi.");
             }
         },
         handleFocusTask(task) {
-            console.log("useImperativeHandle ", task);
             if (viewerRef.current && task) {
                 const entity = viewerRef.current.entities.getById(task.id.toString());
                 if (entity) {
@@ -82,7 +84,8 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
         </table>
     `,
             properties: {
-                type: "unitPin"
+                type: "unitPin",
+                id: unit.id
             }
         });
 
@@ -135,7 +138,8 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
                 },
                 properties: {
-                    type: "taskArea"
+                    type: "taskArea",
+                    id: task.id
                 },
                 description: `
         <table class="cesium-infoBox-descriptionTable">
@@ -200,16 +204,27 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
             const removeListener = viewer.scene.postRender.addEventListener(onMapReady);
             const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
+
             handler.setInputAction((click) => {
                 const pickedObject = viewer.scene.pick(click.position);
                 const cartesian = viewer.camera.pickEllipsoid(click.position);
 
                 if (Cesium.defined(pickedObject) && pickedObject.id) {
                     if (pickedObject.id.properties && pickedObject.id.properties.type && pickedObject.id.properties.type.getValue() === "unitPin") {
+                        onSelectUnit({
+                            id: pickedObject.id.properties.id
+                        });
+                        (async () => {
+                            const selectedUnit = await unitService.getById(pickedObject.id.properties.id);
+                            drawUnitPaths(selectedUnit, viewer);
+                        })();
                         return;
                     }
+                    onUnSelectUnit({});
                     activePointsRef.current.push(cartesian);
-
+                    onSelectedTaskArea({
+                        id: pickedObject.id.properties.id
+                    });
                     viewer.entities.add({
                         position: cartesian,
                         point: { pixelSize: 8, color: Cesium.Color.RED, disableDepthTestDistance: Number.POSITIVE_INFINITY }
@@ -223,6 +238,7 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
 
 
                 } else {
+                    onUnSelectUnit({});
                     if (Cesium.defined(cartesian)) {
                         activePointsRef.current.push(cartesian);
 
@@ -245,6 +261,7 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                         }
                     }
                 }
+
 
             }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
@@ -307,8 +324,6 @@ const focusOnTurkey = (viewer) => {
 
 const startUnitMovement = (viewer, entity, unit) => {
 
-
-
     const movementState = {
         speed: unit.speed,
         heading: unit.course,
@@ -326,17 +341,13 @@ const startUnitMovement = (viewer, entity, unit) => {
         const lat = Cesium.Math.toDegrees(cartographic.latitude);
         const lon = Cesium.Math.toDegrees(cartographic.longitude);
 
-        console.log(`Backend'e gönderiliyor: ${lat}, ${lon}`);
 
         const payload = {
             unit: unit,
-            lat: Cesium.Math.toDegrees(lat),
-            lng: Cesium.Math.toDegrees(lon)
+            lat: lat,
+            lng: lon
         };
-        const result = await unitPositionService.createUnitPosition(payload);
-        if (result) {
-            console.log("Backend'e gönderildi")
-        }
+        await unitPositionService.createUnitPosition(payload);
 
     }, 3000);
 
@@ -371,6 +382,16 @@ const startUnitMovement = (viewer, entity, unit) => {
         stop: () => { movementState.speed = 0; },
         destroy: () => { viewer.scene.preUpdate.removeEventListener(onUpdate); }
     };
+};
+
+const removeAutomatedEntities = (viewer) => {
+    const toRemove = viewer.entities.values.filter(entity => {
+        return !entity.properties || !entity.properties.type;
+    });
+
+    toRemove.forEach(entity => {
+        viewer.entities.remove(entity);
+    });
 };
 
 export default CesiumMap;

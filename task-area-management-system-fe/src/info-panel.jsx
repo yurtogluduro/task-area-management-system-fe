@@ -5,7 +5,6 @@ function InfoPanel({ selectedRegion, onSaveTask, tasks, isFormVisible }) {
     const [taskName, setTaskName] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
-    console.log("Paneldeki Durum:", isFormVisible);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -17,7 +16,6 @@ function InfoPanel({ selectedRegion, onSaveTask, tasks, isFormVisible }) {
 
     return (
         <div style={{ padding: "20px" }}>
-            {console.log('isFormVisible ' + isFormVisible)}
             {isFormVisible ? (
                 <div style={{ background: "#f9f9f9", padding: "15px", borderRadius: "8px" }}>
                     <h3>Yeni Görev Bölgesi Tanımla</h3>

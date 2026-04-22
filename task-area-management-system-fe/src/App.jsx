@@ -2,6 +2,10 @@ import React, { useState, useRef, useCallback } from 'react';
 import CesiumMap from './cesium-map';
 import TaskAreaPopup from './task-area-form-component';
 import TaskListPopUp from './components/task-list-popup';
+import ChartComponent from './components/chart-component';
+import ScatterChartComponent from './components/scatter-chart-component';
+
+
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer, toast } from 'react-toastify';
 import taskAreaService from './service/task-area-service';
@@ -10,30 +14,64 @@ import unitService from './service/unit-service';
 import * as Cesium from 'cesium';
 import Header from './components/header';
 import UnitFormComponent from './components/unit-form-component';
+import unitPositionService from './service/unit-position-service';
 
 
 function App() {
     const [activeCoordinates, setActiveCoordinates] = useState(null);
+    const [selectedTaskRegion, setSelectedTaskRegion] = useState(null);
     const [activeUnitCoordinates, setActiveUnitCoordinates] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [isPopupOpen, setIsPopupOpen] = useState(false);
     const [isUnitFormOpen, setIsUnitFormOpen] = useState(false);
     const [displayUnitFormButton, setDisplayUnitFormButton] = useState(false);
     const [isTaskListPopupOpen, setIsTaskListPopupOpen] = useState(false);
+    const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+    const [selectedUnitHistory, setSelectedUnitHistory] = useState([]);
+    const [selectedAllUnitHistory, setSelectedAllUnitHistory] = useState([]);
+    const [isRightAllPanelOpen, setIsRightAllPanelOpen] = useState(false);
 
     const cesiumRef = useRef();
+
+
+
+
+    const calculateUnitStatistics = () => {
+
+        (async () => {
+            const calculatedData = await unitPositionService.getUnitPositionStatistics();
+            setSelectedAllUnitHistory(calculatedData);
+            setIsRightAllPanelOpen(true);
+        })();
+    };
+
     const handleRegionSelect = useCallback((regionData) => {
         setActiveCoordinates(regionData?.coords);
     }, []);
+
+    const onSelectUnit = (unitInfo) => {
+
+        (async () => {
+            const rawHistory = await unitPositionService.getByUnitId(unitInfo.id)
+            const processedData = calculateDistanceData(rawHistory);
+            setSelectedUnitHistory(processedData);
+            setIsRightPanelOpen(true);
+        })();
+
+
+    };
 
     const onSelectUnitArea = useCallback((regionData) => {
         setDisplayUnitFormButton(true);
         setActiveUnitCoordinates(regionData?.coords)
     }, []);
 
+    const onSelectedTaskArea = useCallback((regionData) => {
+        setSelectedTaskRegion(regionData);
+    }, []);
+
     const handleTaskList = useCallback((tasks) => {
         setTasks(tasks?.taskListInfo);
-        console.log("handleTaskList running : ", tasks)
     }, []);
 
     const prepareCoordinatesDegree = (cartesianPositions) => {
@@ -60,10 +98,10 @@ function App() {
     };
 
     const saveUnit = async (formData) => {
-        console.log("saveUnit : ", formData);
         const unit = {
             ...formData,
-            unitPositions: prepareCoordinatesDegreeUnit(activeUnitCoordinates)
+            unitPositions: prepareCoordinatesDegreeUnit(activeUnitCoordinates),
+            taskAreaId: selectedTaskRegion.id?.getValue()
         };
         try {
             const result = await unitService.createUnit(unit);
@@ -71,6 +109,7 @@ function App() {
                 toast.success("Birim başarıyla kaydedildi!");
                 setDisplayUnitFormButton(false);
                 setIsUnitFormOpen(false);
+                cesiumRef.current.addNewUnit(result);
             }
 
         } catch (error) {
@@ -85,7 +124,6 @@ function App() {
             coordinates: prepareCoordinatesDegree(activeCoordinates)
         };
 
-        console.log("New task :", newTask);
         try {
             const result = await taskAreaService.createTaskArea(newTask);
             if (result) {
@@ -132,11 +170,33 @@ function App() {
         setIsTaskListPopupOpen(true);
     };
 
+    const calculateDistanceData = (history) => {
+        let totalDist = 0;
+        return history.map((point, index) => {
+            if (index === 0) return { time: point.createdAt, distance: 0 };
+
+            // Haversine Formülü (Basitleştirilmiş)
+            const R = 6371; // Dünya yarıçapı (km)
+            const dLat = (point.lat - history[index - 1].lat) * Math.PI / 180;
+            const dLon = (point.lng - history[index - 1].lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(history[index - 1].lat * Math.PI / 180) * Math.cos(point.lat * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            totalDist += R * c;
+
+            return {
+                time: new Date(point.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                distance: parseFloat(totalDist.toFixed(2))
+            };
+        });
+    };
+
     return (
         <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
             <Header />
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                <CesiumMap ref={cesiumRef} onSelectUnitArea={onSelectUnitArea} onSelect={handleRegionSelect} onHandleTasks={handleTaskList} />
+                <CesiumMap ref={cesiumRef} onSelectUnit={onSelectUnit} onSelectedTaskArea={onSelectedTaskArea} onSelectUnitArea={onSelectUnitArea} onSelect={handleRegionSelect} onUnSelectUnit={() => setIsRightPanelOpen(false)} onHandleTasks={handleTaskList} />
             </div>
             <TaskAreaPopup
                 isOpen={isPopupOpen}
@@ -160,6 +220,28 @@ function App() {
                 pauseOnHover
                 theme="colored"
             />
+            {isRightPanelOpen && (
+                <div style={styles.rightPanel}>
+                    <div style={styles.panelHeader}>
+                        <h3>Birim Analiz Grafiği</h3>
+                        <button onClick={() => setIsRightPanelOpen(false)} style={styles.closeBtn}>×</button>
+                    </div>
+                    <div style={styles.panelContent}>
+                        <ChartComponent data={selectedUnitHistory} />
+                    </div>
+                </div>
+            )}
+            {isRightAllPanelOpen && (
+                <div style={styles.rightPanel}>
+                    <div style={styles.panelHeader}>
+                        <h3>Birim Analiz Grafiği</h3>
+                        <button onClick={() => isRightAllPanelOpen(false)} style={styles.closeBtn}>×</button>
+                    </div>
+                    <div style={styles.panelContent}>
+                        <ScatterChartComponent data={selectedAllUnitHistory} />
+                    </div>
+                </div>
+            )}
             {isTaskListPopupOpen && (
                 <TaskListPopUp
                     tasks={tasks}
@@ -178,8 +260,9 @@ function App() {
                 </button>
 
                 <button style={styles.menuItem} onClick={openUnitForm}>
-                    <span style={styles.label}>Birlik Oluştur</span>
+                    <span style={styles.label}>Birim Oluştur</span>
                 </button>
+
             </div>
         </div>
     );
@@ -230,6 +313,43 @@ const styles = {
         fontWeight: '500',
         textTransform: 'uppercase',
         letterSpacing: '0.5px'
+    },
+    rightPanel: {
+        position: 'fixed',
+        top: '200px', // Header'ın altında kalması için
+        right: '20px',
+        width: '450px',
+        height: 'calc(100vh - 140px)', // Alt bar ve header arası mesafe
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(10px)',
+        borderRadius: '15px',
+        boxShadow: '-5px 0 25px rgba(0,0,0,0.2)',
+        zIndex: 2000,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '20px',
+        border: '1px solid rgba(255,255,255,0.3)',
+        animation: 'slideIn 0.3s ease-out'
+    },
+    panelHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '20px',
+        borderBottom: '1px solid #eee',
+        paddingBottom: '10px',
+        color: '#2c3e50'
+    },
+    closeBtn: {
+        background: 'none',
+        border: 'none',
+        fontSize: '24px',
+        cursor: 'pointer',
+        color: '#666'
+    },
+    panelContent: {
+        flex: 1,
+        overflowY: 'auto'
     }
 };
 
