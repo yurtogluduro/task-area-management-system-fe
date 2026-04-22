@@ -3,6 +3,7 @@ import * as Cesium from "cesium";
 import "cesium/Source/Widgets/widgets.css";
 import taskAreaService from './service/task-area-service';
 import unitService from './service/unit-service';
+import unitPositionService from './service/unit-position-service';
 
 import { AreaType } from './constants/enums';
 
@@ -24,6 +25,14 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                 console.log("Yeni entity haritaya eklendi.");
             }
         },
+        addNewUnit(newRecord) {
+            if (viewerRef.current && newRecord) {
+                const existing = viewerRef.current.entities.getById(newRecord.id.toString());
+                if (existing) return;
+                markUnitOnMap(viewerRef.current, newRecord)
+                console.log("Yeni unit haritaya eklendi.");
+            }
+        },
         handleFocusTask(task) {
             console.log("useImperativeHandle ", task);
             if (viewerRef.current && task) {
@@ -39,6 +48,49 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
         }
     }), []);
 
+    const markUnitOnMap = (viewer, unit) => {
+        if (!viewer || unit.unitPositions.length == 0) return;
+
+        const unitEntity = viewer.entities.add({
+            name: "Birim Bilgileri",
+
+            position: Cesium.Cartesian3.fromDegrees(unit.unitPositions[0].lng, unit.unitPositions[0].lat),
+            point: {
+                pixelSize: 12,
+                color: Cesium.Color.RED,
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 3,
+                heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY
+            },
+            description: `
+        <table class="cesium-infoBox-descriptionTable">
+            <tbody>
+                <tr>
+                    <th>Birim Adı : </th>
+                    <td>${unit.name}</td>
+                </tr>
+                <tr>
+                    <th>Hareket Açısı :</th>
+                    <td>${unit.course}</td>
+                </tr>
+                <tr>
+                    <th>Hareket Hızı  :</th>
+                    <td>${unit.speed || 'Açıklama yok.'}</td>
+                </tr>
+            </tbody>
+        </table>
+    `,
+            properties: {
+                type: "unitPin"
+            }
+        });
+
+        startUnitMovement(viewer, unitEntity, unit);
+
+        return unitEntity;
+    };
+
     const drawUnitPaths = (unit, viewer) => {
         if (!unit.unitPositions || unit.unitPositions.length < 2) {
             console.warn("Çizim için en az 2 koordinat gereklidir.");
@@ -51,6 +103,7 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
             polyline: {
                 positions: Cesium.Cartesian3.fromDegreesArray(positionsArray),
                 width: 4,
+                name: 'unit',
                 material: Cesium.Color.YELLOW,
                 clampToGround: true,
             }
@@ -77,8 +130,12 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                 polygon: {
                     hierarchy: Cesium.Cartesian3.fromDegreesArray(degreeArray),
                     material: Cesium.Color.BLUE.withAlpha(0.4),
+                    name: 'areaTask',
                     outline: true,
                     heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+                },
+                properties: {
+                    type: "taskArea"
                 },
                 description: `
         <table class="cesium-infoBox-descriptionTable">
@@ -131,7 +188,7 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                     }
                     const units = await unitService.getAllUnits();
                     if (units && units.length > 0) {
-                        units.forEach(unit => drawUnitPaths(unit, viewer));
+                        units.forEach(unit => markUnitOnMap(viewer, unit));
                         console.log("cesium unitleri aldı  ", units)
 
                     }
@@ -148,7 +205,9 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                 const cartesian = viewer.camera.pickEllipsoid(click.position);
 
                 if (Cesium.defined(pickedObject) && pickedObject.id) {
-
+                    if (pickedObject.id.properties && pickedObject.id.properties.type && pickedObject.id.properties.type.getValue() === "unitPin") {
+                        return;
+                    }
                     activePointsRef.current.push(cartesian);
 
                     viewer.entities.add({
@@ -158,10 +217,10 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref
                     const entity = pickedObject.id;
                     viewer.selectedEntity = entity;
                     const finalPoints = [...activePointsRef.current];
-
                     onSelectUnitArea({
                         coords: [finalPoints[finalPoints.length - 1]]
                     });
+
 
                 } else {
                     if (Cesium.defined(cartesian)) {
@@ -243,6 +302,75 @@ const focusOnTurkey = (viewer) => {
         },
         duration: 2
     });
+};
+
+
+const startUnitMovement = (viewer, entity, unit) => {
+
+
+
+    const movementState = {
+        speed: unit.speed,
+        heading: unit.course,
+        currentPos: entity.position.getValue(viewer.clock.currentTime)
+    };
+
+    entity.position = new Cesium.CallbackProperty(() => {
+        return movementState.currentPos;
+    }, false);
+
+    setInterval(async () => {
+        const currentPos = movementState.currentPos;
+
+        const cartographic = Cesium.Cartographic.fromCartesian(currentPos);
+        const lat = Cesium.Math.toDegrees(cartographic.latitude);
+        const lon = Cesium.Math.toDegrees(cartographic.longitude);
+
+        console.log(`Backend'e gönderiliyor: ${lat}, ${lon}`);
+
+        const payload = {
+            unit: unit,
+            lat: Cesium.Math.toDegrees(lat),
+            lng: Cesium.Math.toDegrees(lon)
+        };
+        const result = await unitPositionService.createUnitPosition(payload);
+        if (result) {
+            console.log("Backend'e gönderildi")
+        }
+
+    }, 3000);
+
+    const onUpdate = (scene, time) => {
+        if (movementState.speed === 0) return;
+
+        const deltaSeconds = scene.deltaTime || 1 / 60;
+        const distanceStep = movementState.speed * deltaSeconds;
+
+        const cartographic = Cesium.Cartographic.fromCartesian(movementState.currentPos);
+
+        const headingRad = Cesium.Math.toRadians(movementState.heading);
+        const latDelta = (Math.cos(headingRad) * distanceStep) / 111320;
+        const lonDelta = (Math.sin(headingRad) * distanceStep) /
+            (111320 * Math.cos(cartographic.latitude));
+
+        const newLon = cartographic.longitude + Cesium.Math.toRadians(lonDelta);
+        const newLat = cartographic.latitude + Cesium.Math.toRadians(latDelta);
+
+        movementState.currentPos = Cesium.Cartesian3.fromRadians(
+            newLon,
+            newLat,
+            cartographic.height
+        );
+    };
+
+    viewer.scene.preUpdate.addEventListener(onUpdate);
+
+    return {
+        setSpeed: (s) => { movementState.speed = s; },
+        setHeading: (h) => { movementState.heading = h; },
+        stop: () => { movementState.speed = 0; },
+        destroy: () => { viewer.scene.preUpdate.removeEventListener(onUpdate); }
+    };
 };
 
 export default CesiumMap;
