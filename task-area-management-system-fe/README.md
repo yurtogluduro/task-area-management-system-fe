@@ -1,16 +1,23 @@
-# React + Vite
+# Task Area Management System - Core Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Bu proje, stratejik birimlerin 3D dünya üzerinde gerçek zamanlı takibi, görselleştirilmesi ve coğrafi alan yönetiminin yapılması amacıyla geliştirilmiş bir kontrol panelidir.
 
-Currently, two official plugins are available:
+## 🚀 Öne Çıkan Özellikler
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **3D Yer Bilgisi:** CesiumJS ve Resium entegrasyonu ile küresel ölçekte hassas takip.
+- **İnteraktif Birim Yönetimi:** Harita üzerindeki sembollerin (pin) mouse ile sürükle-bırak yöntemiyle konumlandırılması.
+- **Görev Bölgesi Tanımlama:** Çokgen (Polygon) çizim araçları ile dinamik operasyonel alan oluşturma.
+- **Durumsal Farkındalık:** Birim seçildiğinde açılan detay paneli ile harita bütünlüğünü bozmadan veri takibi.
 
-## React Compiler
+## 🛠 Teknoloji Yığını
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend:** React.js
+- **Harita Motoru:** CesiumJS / Resium
+- **Durum Yönetimi:** React Hooks
+- **Bildirimler:** React-Toastify
 
-## Expanding the ESLint configuration
+## 📦 Kurulum
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+1. Bağımlılıkları yükleyin: `npm install`
+2. Uygulamayı başlatın: `npm start`
+3. Tarayıcıda `localhost:5173` adresine gidin.
