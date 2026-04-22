@@ -32,10 +32,5 @@ public class TaskAreaController {
     public ResponseEntity<List<TaskAreaDto>> getAll() {
         return ResponseEntity.ok(taskAreaService.getAllTasks());
     }
-    /*
-    @GetMapping("/{id}")
-    public ResponseEntity<TaskAreaDto> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(taskAreaService.getById(id));
-    }
-    */
+
 }

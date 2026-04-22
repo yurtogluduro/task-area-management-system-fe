@@ -1,13 +1,15 @@
 import React, { useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as Cesium from "cesium";
 import "cesium/Source/Widgets/widgets.css";
-import taskAreaService from './service/taskAreaService';
+import taskAreaService from './service/task-area-service';
+import unitService from './service/unit-service';
+
 import { AreaType } from './constants/enums';
 
 Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2ODUwZGFlOC1hZTY2LTQ3NGMtOTYyZi00YzIzYTEzNWU0MTEiLCJpZCI6NDE5OTAwLCJpYXQiOjE3NzY1MDk4ODd9.pCjHVbb_dq_cBa6qsAiQzTph9669PKnKZUwmTlrgPHY';
 
 
-const CesiumMap = forwardRef(({ onSelect, onHandleTasks }, ref) => {
+const CesiumMap = forwardRef(({ onSelect, onHandleTasks, onSelectUnitArea }, ref) => {
     const cesiumContainer = useRef(null);
     const viewerRef = useRef(null);
 
@@ -37,6 +39,26 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks }, ref) => {
         }
     }), []);
 
+    const drawUnitPaths = (unit, viewer) => {
+        if (!unit.unitPositions || unit.unitPositions.length < 2) {
+            console.warn("Çizim için en az 2 koordinat gereklidir.");
+            return null;
+        }
+
+        const positionsArray = unit.unitPositions.flatMap(c => [c.lng, c.lat]);
+
+        const pathEntity = viewer.entities.add({
+            polyline: {
+                positions: Cesium.Cartesian3.fromDegreesArray(positionsArray),
+                width: 4,
+                material: Cesium.Color.YELLOW,
+                clampToGround: true,
+            }
+        });
+
+        return pathEntity;
+    };
+
     const drawTaskOnMap = (viewer, task) => {
         if (!task.coordinates || task.coordinates.length < 3) return;
 
@@ -48,7 +70,7 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks }, ref) => {
             ]);
 
         try {
-            const entity = viewer.entities.add({
+            viewer.entities.add({
                 id: task.id.toString(),
                 name: 'Görev Alanı Bilgisi',
                 areaName: task.taskName,
@@ -107,26 +129,41 @@ const CesiumMap = forwardRef(({ onSelect, onHandleTasks }, ref) => {
                             taskListInfo: tasks
                         });
                     }
+                    const units = await unitService.getAllUnits();
+                    if (units && units.length > 0) {
+                        units.forEach(unit => drawUnitPaths(unit, viewer));
+                        console.log("cesium unitleri aldı  ", units)
+
+                    }
                 } catch (error) {
                     console.error("Veri hatası:", error);
                 }
             };
 
             const removeListener = viewer.scene.postRender.addEventListener(onMapReady);
-
-
             const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
             handler.setInputAction((click) => {
                 const pickedObject = viewer.scene.pick(click.position);
-                if (Cesium.defined(pickedObject) && pickedObject.id) {
-                    const entity = pickedObject.id;
-                    const name = entity.taskName;
+                const cartesian = viewer.camera.pickEllipsoid(click.position);
 
-                    console.log("Seçilen Alanın Adı:", name);
+                if (Cesium.defined(pickedObject) && pickedObject.id) {
+
+                    activePointsRef.current.push(cartesian);
+
+                    viewer.entities.add({
+                        position: cartesian,
+                        point: { pixelSize: 8, color: Cesium.Color.RED, disableDepthTestDistance: Number.POSITIVE_INFINITY }
+                    });
+                    const entity = pickedObject.id;
                     viewer.selectedEntity = entity;
+                    const finalPoints = [...activePointsRef.current];
+
+                    onSelectUnitArea({
+                        coords: [finalPoints[finalPoints.length - 1]]
+                    });
+
                 } else {
-                    const cartesian = viewer.camera.pickEllipsoid(click.position);
                     if (Cesium.defined(cartesian)) {
                         activePointsRef.current.push(cartesian);
 

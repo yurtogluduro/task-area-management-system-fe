@@ -28,8 +28,6 @@ public class TaskAreaDto extends BaseModelDto{
     private LocalDateTime startDate;
     @NotNull(message = "Bitiş tarihi zorunludur")
     private LocalDateTime endDate;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 
     public String getTaskName() {
         return taskName;
@@ -61,22 +59,6 @@ public class TaskAreaDto extends BaseModelDto{
 
     public void setAreaType(TaskAreaTypeEnum areaType) {
         this.areaType = areaType;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
     }
 
     public LocalDateTime getStartDate() {

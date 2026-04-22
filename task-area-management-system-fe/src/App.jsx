@@ -1,23 +1,34 @@
 import React, { useState, useRef, useCallback } from 'react';
-import CesiumMap from './CesiumMap';
-import TaskAreaPopup from './TaskAreaPopUp';
+import CesiumMap from './cesium-map';
+import TaskAreaPopup from './task-area-form-component';
 import TaskListPopUp from './components/task-list-popup';
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer, toast } from 'react-toastify';
-import taskAreaService from './service/taskAreaService';
+import taskAreaService from './service/task-area-service';
+import unitService from './service/unit-service';
+
 import * as Cesium from 'cesium';
-import Header from './components/Header';
+import Header from './components/header';
+import UnitFormComponent from './components/unit-form-component';
+
 
 function App() {
     const [activeCoordinates, setActiveCoordinates] = useState(null);
+    const [activeUnitCoordinates, setActiveUnitCoordinates] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [isPopupOpen, setIsPopupOpen] = useState(false);
+    const [isUnitFormOpen, setIsUnitFormOpen] = useState(false);
+    const [displayUnitFormButton, setDisplayUnitFormButton] = useState(false);
     const [isTaskListPopupOpen, setIsTaskListPopupOpen] = useState(false);
 
-    const isButtonDisabled = activeCoordinates === null;
     const cesiumRef = useRef();
     const handleRegionSelect = useCallback((regionData) => {
         setActiveCoordinates(regionData?.coords);
+    }, []);
+
+    const onSelectUnitArea = useCallback((regionData) => {
+        setDisplayUnitFormButton(true);
+        setActiveUnitCoordinates(regionData?.coords)
     }, []);
 
     const handleTaskList = useCallback((tasks) => {
@@ -35,6 +46,37 @@ function App() {
                 orderIndex: index
             };
         });
+    };
+
+    const prepareCoordinatesDegreeUnit = (cartesianPositions) => {
+        return cartesianPositions.map((cartesian) => {
+            const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+
+            return {
+                lng: Cesium.Math.toDegrees(cartographic.longitude),
+                lat: Cesium.Math.toDegrees(cartographic.latitude)
+            };
+        });
+    };
+
+    const saveUnit = async (formData) => {
+        console.log("saveUnit : ", formData);
+        const unit = {
+            ...formData,
+            unitPositions: prepareCoordinatesDegreeUnit(activeUnitCoordinates)
+        };
+        try {
+            const result = await unitService.createUnit(unit);
+            if (result) {
+                toast.success("Birim başarıyla kaydedildi!");
+                setDisplayUnitFormButton(false);
+                setIsUnitFormOpen(false);
+            }
+
+        } catch (error) {
+            console.error("Servis hatası:", error);
+        }
+
     };
 
     const handleFinalSubmit = async (formData) => {
@@ -62,10 +104,18 @@ function App() {
     };
 
     const handleMakeTaskArea = () => {
-        if (activeCoordinates.length >= 3) {
+        if (activeCoordinates && activeCoordinates.length >= 3) {
             setIsPopupOpen(true);
         } else {
             toast.warn("Lütfen önce harita üzerinde bir alan çizin!");
+        }
+    };
+
+    const openUnitForm = () => {
+        if (displayUnitFormButton) {
+            setIsUnitFormOpen(true);
+        } else {
+            toast.warn("Lütfen harita üzerinden bir Görev Alanı seçiniz.");
         }
     };
 
@@ -85,60 +135,18 @@ function App() {
     return (
         <div style={{ display: 'flex', width: '100vw', height: '100vh' }}>
             <Header />
-            <button
-                disabled={isButtonDisabled}
-
-                onClick={handleMakeTaskArea}
-                style={{
-                    position: "absolute",
-                    bottom: 70,
-                    left: "40%",
-                    transform: "translateX(-50%)",
-                    zIndex: 10,
-                    padding: "12px 24px",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    border: "none",
-
-                    backgroundColor: !activeCoordinates ? "#bdc3c7" : "#3498db",
-                    color: !activeCoordinates ? "#7f8c8d" : "white",
-                    cursor: !activeCoordinates ? "not-allowed" : "pointer",
-
-                    transition: "all 0.3s ease"
-                }}
-            >
-                {!activeCoordinates ? "Lütfen Haritadan Alan Seçin" : "Seçili Alanı Görev Bölgesi Yap"}
-            </button>
-            <button
-
-                onClick={openTaskAreaList}
-                style={{
-                    position: "absolute",
-                    bottom: 70,
-                    left: "60%",
-                    transform: "translateX(-50%)",
-                    zIndex: 10,
-                    padding: "12px 24px",
-                    borderRadius: "8px",
-                    fontWeight: "bold",
-                    border: "none",
-
-                    backgroundColor: "#3498db",
-                    color: "white",
-                    cursor: "pointer",
-
-                    transition: "all 0.3s ease"
-                }}
-            >
-                {"Görev Bölgesi Listesi"}
-            </button>
             <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
-                <CesiumMap ref={cesiumRef} onSelect={handleRegionSelect} onHandleTasks={handleTaskList} />
+                <CesiumMap ref={cesiumRef} onSelectUnitArea={onSelectUnitArea} onSelect={handleRegionSelect} onHandleTasks={handleTaskList} />
             </div>
             <TaskAreaPopup
                 isOpen={isPopupOpen}
                 onClose={() => setIsPopupOpen(false)}
                 onSubmit={handleFinalSubmit}
+            />
+            <UnitFormComponent
+                isOpen={isUnitFormOpen}
+                onClose={() => setIsUnitFormOpen(false)}
+                onSubmit={saveUnit}
             />
             <ToastContainer
                 position="top-right"
@@ -159,8 +167,70 @@ function App() {
                     onFocusTask={handleGoToTask}
                 />
             )}
+            <div style={styles.bottomBar}>
+                <button style={styles.menuItem} onClick={handleMakeTaskArea}
+                >
+                    <span style={styles.label}>Görev Bölgesi Oluştur</span>
+                </button>
+
+                <button style={styles.menuItem} onClick={openTaskAreaList} >
+                    <span style={styles.label}>Görev Bölgeleri</span>
+                </button>
+
+                <button style={styles.menuItem} onClick={openUnitForm}>
+                    <span style={styles.label}>Birlik Oluştur</span>
+                </button>
+            </div>
         </div>
     );
 }
+
+const styles = {
+    bottomBar: {
+        position: 'fixed',
+        bottom: '40px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+
+        width: 'auto',
+        minWidth: '300px',
+        backgroundColor: 'rgba(44, 62, 80, 0.95)',
+        backdropFilter: 'blur(10px)',
+
+        display: 'flex',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+
+        padding: '10px 25px',
+        borderRadius: '40px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        zIndex: 1100,
+        border: '1px solid rgba(255,255,255,0.1)',
+    },
+
+    menuItem: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        background: 'none',
+        border: 'none',
+        color: 'white',
+        cursor: 'pointer',
+        padding: '5px 15px',
+        transition: 'transform 0.2s',
+        gap: '4px'
+    },
+
+    icon: {
+        fontSize: '20px',
+    },
+
+    label: {
+        fontSize: '11px',
+        fontWeight: '500',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+    }
+};
 
 export default App;

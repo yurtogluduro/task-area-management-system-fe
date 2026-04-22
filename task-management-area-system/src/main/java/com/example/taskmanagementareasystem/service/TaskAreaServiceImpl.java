@@ -10,8 +10,8 @@ import java.util.List;
 @Service
 public class TaskAreaServiceImpl implements TaskAreaService{
 
-    private TaskAreaRepository taskAreaRepository;
-    private TaskAreaMapper mapper;
+    private final TaskAreaRepository taskAreaRepository;
+    private final TaskAreaMapper mapper;
     TaskAreaServiceImpl(TaskAreaRepository taskAreaRepository, TaskAreaMapper mapper){
         this.taskAreaRepository = taskAreaRepository;
         this.mapper = mapper;
